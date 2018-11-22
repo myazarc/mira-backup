@@ -143,9 +143,31 @@
       </div>
     </m-dialog>
 
-    <m-dialog v-model="showUploadServicesDialog" :title="`Upload Services`">
+    <m-dialog v-model="showUploadServicesDialog" @approve="saveService" :title="`Upload Services`">
       <div style="padding:10px;">
-          
+          <div class="form-group">
+            <label>Upload Service</label>
+              <select class="form-control">
+                <option value="0">New</option>
+              </select>
+          </div>
+        <div style="width:50%;padding:5px;float:left">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" v-model="formData.service.name" class="form-control" placeholder="Name">
+          </div>
+          <div class="form-group">
+            <label>Service</label>
+              <select v-model="formData.service.type" class="form-control">
+                <option value="yandexdisk">Yandex.Disk</option>
+                <option value="ftp">FTP</option>
+              </select>
+          </div>
+          <button class="btn btn-positive" @click="connect">Connect</button>
+          <br>Status: <span class="icon icon-record" :style="{color:formData.service.statusColor}"></span> {{formData.service.statusMessage}}
+        </div>
+        <div style="clear:both"></div>
+
       </div>
     </m-dialog>
     
@@ -161,7 +183,43 @@ export default {
     return {
       showAddEditDialog: false,
       showUploadServicesDialog:false,
+
+      formData: {
+        service: {
+          name: null,
+          type: 'yandexdisk',
+          statusColor:'#fc605b',
+          statusMessage:'Not Connected',
+        },
+      },
+
+      tokenData: null,
     };
+  },
+  mounted(){
+    this.$electron.ipcRenderer.on('yandex-oauth-reply',(event,arg) => {
+      if(arg.status){
+        this.formData.service.statusColor = '#34c84a';
+        this.formData.service.statusMessage = 'Connected';
+        this.tokenData = arg.token;
+      } else {
+        this.formData.service.statusColor = '#fc605b';
+        this.formData.service.statusMessage = 'Not Connected';
+      }
+    })
+  },
+  methods:{
+    connect(){
+      if(this.formData.service.type == 'yandexdisk')
+        this.$electron.ipcRenderer.send('yandex-oauth', 'getToken');
+    },
+    saveService(){
+      this.$utils.saveToken(this.formData.service,JSON.stringify(this.tokenData)).then((id) => {
+        console.log(id);
+      }).catch((err) => {
+        console.log(err);
+      });
+    },
   },
   
 }
