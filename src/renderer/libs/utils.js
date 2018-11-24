@@ -13,9 +13,11 @@ export default {
   },
   cryptr: null,
   init(){
-    this.dbInit();
-    this.cryptrInit();
-    this.tokenInit();
+    if(this.db.service == null) {
+      this.dbInit();
+      this.cryptrInit();
+      this.tokenInit();
+    }
   },
   getDbPath(){
     return remote.app.getPath('userData');
@@ -53,5 +55,13 @@ export default {
   },
   createFile(fileName,content){
     fs.writeFileSync(fileName,content);
+  },
+  allService(){
+    return new Promise((resolve,reject) => {
+      this.db.service.find({},(err, rows) => {
+        if(err) reject(err);
+        resolve(rows);
+      });
+    });
   },
 }

@@ -125,7 +125,11 @@
             <button class="btn btn-sm btn-positive pull-right" @click="showUploadServicesDialog=true">New</button>
 
             <select class="form-control">
-              <option>Create Upload Service</option>
+              <option value="" v-show="!allServices.length">Create New Service</option>
+              <option v-for="(service,index) in allServices"
+              :key="`service-${index}`"
+              :value="service._id"
+              >{{service.name}}</option>
             </select>
            </div>
           
@@ -147,8 +151,12 @@
       <div style="padding:10px;">
           <div class="form-group">
             <label>Upload Service</label>
-              <select class="form-control">
-                <option value="0">New</option>
+              <select v-model="selectedDatas.newService" class="form-control">
+                <option value="">New</option>
+                <option v-for="(service,index) in allServices"
+                :key="`service-${index}`"
+                :value="service._id"
+                >{{service.name}}</option>
               </select>
           </div>
         <div style="width:50%;padding:5px;float:left">
@@ -175,6 +183,7 @@
 </template>
 
 <script>
+import { mapActions, mapState } from 'vuex';
 import Dialog from './Dialog/Dialog';
 export default {
   components:{'m-dialog':Dialog},
@@ -194,7 +203,16 @@ export default {
       },
 
       tokenData: null,
+
+      selectedDatas: {
+        newService: "",
+      },
     };
+  },
+  computed:{
+    ...mapState({
+      allServices: state => state.Services.services,
+    }),
   },
   mounted(){
     this.$electron.ipcRenderer.on('yandex-oauth-reply',(event,arg) => {
@@ -206,9 +224,11 @@ export default {
         this.formData.service.statusColor = '#fc605b';
         this.formData.service.statusMessage = 'Not Connected';
       }
-    })
+    });
+    this.getAllServices();
   },
   methods:{
+    ...mapActions(['getAllServices']),
     connect(){
       if(this.formData.service.type == 'yandexdisk')
         this.$electron.ipcRenderer.send('yandex-oauth', 'getToken');
@@ -219,6 +239,23 @@ export default {
       }).catch((err) => {
         console.log(err);
       });
+    },
+  },
+  watch:{
+    'selectedDatas.newService'(val) {
+      let selectedRow="";
+      if(val!=""){
+        selectedRow = this.allServices.find(item => item._id == val);
+        this.formData.service.name=selectedRow.name;
+        this.formData.service.type=selectedRow.type;
+        this.formData.service.statusColor=selectedRow.statusColor;
+        this.formData.service.statusMessage=selectedRow.statusMessage;
+      }else {
+        this.formData.service.name=null;
+        this.formData.service.type='yandexdisk';
+        this.formData.service.statusColor='#fc605b';
+        this.formData.service.statusMessage='Not Connected';
+      }
     },
   },
   
