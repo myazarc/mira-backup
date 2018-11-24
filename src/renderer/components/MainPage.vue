@@ -60,62 +60,66 @@
       <div style="padding:10px;">
           <div class="form-group">
             <label>Name</label>
-            <input type="text" class="form-control" placeholder="Name">
+            <input type="text" v-model="formData.data.name" class="form-control" placeholder="Name">
           </div>
           <div style="width:50%;padding:5px;float:left">
 
-          <div class="form-group">
+          <div class="form-group" style="width:49%; float:left">
             <label>DB Type</label>
-              <select class="form-control">
+              <select class="form-control"  v-model="formData.data.dbtype">
                 <option value="mysql">MySQL / Maria DB</option>
               </select>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="width:49%;margin-left:2%; float:left">
             <label>Host</label>
-            <input type="text" class="form-control" placeholder="Name">
+            <input type="text" v-model="formData.data.dbhost" class="form-control" placeholder="Host">
           </div>
-          <div class="form-group">
-            <label>User Name</label>
-            <input type="text" class="form-control" placeholder="Name">
+          <div class="form-group" style="width:68%; float:left">
+            <label>DB Name</label>
+            <input type="text" v-model="formData.data.dbname" class="form-control" placeholder="DB Name">
           </div>
-          <div class="form-group">
-            <label>User Password</label>
-            <input type="text" class="form-control" placeholder="Name">
-          </div>
-          <div class="form-group">
+          <div class="form-group" style="width:30%;margin-left:2%; float:left">
             <label>Port</label>
-            <input type="text" class="form-control" placeholder="Name">
+            <input type="text" v-model="formData.data.dbport" class="form-control" placeholder="Port">
           </div>
+          <div class="form-group" style="width:49%; float:left">
+            <label>User Name</label>
+            <input type="text" v-model="formData.data.dbuser" class="form-control" placeholder="User Name">
+          </div>
+          <div class="form-group" style="width:49%;margin-left:2%; float:left">
+            <label>User Password</label>
+            <input type="text" v-model="formData.data.dbpass" class="form-control" placeholder="User Password">
+          </div>
+            <div style="clear:both"></div>
+          <button class="btn btn-positive">Test Connection</button>
+          <br>Status: <span class="icon icon-record" :style="{color:formData.data.statusColor}"></span> {{formData.data.statusMessage}}
+        
         </div>
         <div style="width:50%;padding:5px;float:left">
           <div class="form-group">
             <label>Backup Time <small>(CronJop)</small></label>
             <div style="clear:both"></div>
-            <select class="form-control">
-              <option>Custom</option>
-              <option>Every Day 9AM</option>
-              <option>Every Day 9AM&9PM</option>
-              <option>Every Week Monday</option>
-              <option>Every Week Monday&Friday</option>
-              <option>Every Month 15.Day</option>
-              <option>Every Month 15. & 30.Day</option>
-              <option>Option eight</option>
+            <select v-model="selectedDatas.selectedCronTimes" class="form-control">
+              <option v-for="(item,index) in this.$utils.getDefaultCronTimes()"
+              :key="`cronTimes${item.join('')}`"
+              :value="item.join('|')"
+              >{{index}}</option>
           </select>
           <div style="clear:both;margin-top:5px;"></div>
             <div style="width:18%;float:left; margin:1%;margin-top:0px;">
-              <input type="text" class="form-control" placeholder="Minute" style="text-align:center">
+              <input type="text" v-model="formData.data.cron.minute" class="form-control" placeholder="Minute" style="text-align:center">
             </div>
             <div style="width:18%;float:left; margin:1%;margin-top:0px;">
-              <input type="text" class="form-control" placeholder="Hour" style="text-align:center">
+              <input type="text" v-model="formData.data.cron.hour" class="form-control" placeholder="Hour" style="text-align:center">
             </div>
             <div style="width:18%;float:left; margin:1%;margin-top:0px;">
-              <input type="text" class="form-control" placeholder="Day of Month" style="text-align:center">
+              <input type="text" v-model="formData.data.cron.dayOfMonth" class="form-control" placeholder="Day of Month" style="text-align:center">
             </div>
             <div style="width:18%;float:left; margin:1%;margin-top:0px;">
-              <input type="text" class="form-control" placeholder="Month" style="text-align:center">
+              <input type="text" v-model="formData.data.cron.month" class="form-control" placeholder="Month" style="text-align:center">
             </div>
             <div style="width:18%;float:left; margin:1%;margin-top:0px;">
-              <input type="text" class="form-control" placeholder="Day of Week" style="text-align:center">
+              <input type="text" v-model="formData.data.cron.dayOfWeek" class="form-control" placeholder="Day of Week" style="text-align:center">
             </div>
             <div style="clear:both"></div>
           </div>
@@ -124,7 +128,7 @@
             <label>Upload Service</label>
             <button class="btn btn-sm btn-positive pull-right" @click="showUploadServicesDialog=true">New</button>
 
-            <select class="form-control">
+            <select class="form-control" v-model="formData.data.service">
               <option value="" v-show="!allServices.length">Create New Service</option>
               <option v-for="(service,index) in allServices"
               :key="`service-${index}`"
@@ -135,14 +139,14 @@
           
           <div class="checkbox">
             <label>
-              <input type="checkbox"> Active
+              <input type="checkbox" v-model="formData.data.active"> Active
             </label>
           </div>
           
         </div>
 
      
-
+    
         <div style="clear:both"></div>
       </div>
     </m-dialog>
@@ -159,7 +163,7 @@
                 >{{service.name}}</option>
               </select>
           </div>
-        <div style="width:50%;padding:5px;float:left">
+        <div style="padding:5px;float:left" :style="{width: ftpViewOptions.width}">
           <div class="form-group">
             <label>Name</label>
             <input type="text" v-model="formData.service.name" class="form-control" placeholder="Name">
@@ -173,6 +177,25 @@
           </div>
           <button class="btn btn-positive" @click="connect">Connect</button>
           <br>Status: <span class="icon icon-record" :style="{color:formData.service.statusColor}"></span> {{formData.service.statusMessage}}
+        </div>
+
+        <div style="width:50%;padding:5px;float:left" v-show="ftpViewOptions.isShow">
+         <div class="form-group">
+            <label><strong>FTP</strong><br>Host</label>
+            <input type="text" class="form-control" placeholder="Host">
+          </div>
+          <div class="form-group">
+            <label>User Name</label>
+            <input type="text" class="form-control" placeholder="User Name">
+          </div>
+          <div class="form-group">
+            <label>User Password</label>
+            <input type="text" class="form-control" placeholder="User Password">
+          </div>
+          <div class="form-group">
+            <label>Port</label>
+            <input type="text" class="form-control" placeholder="Port">
+          </div>
         </div>
         <div style="clear:both"></div>
 
@@ -200,12 +223,38 @@ export default {
           statusColor:'#fc605b',
           statusMessage:'Not Connected',
         },
+        data:{
+          name: '',
+          dbtype: 'mysql',
+          dbname: '',
+          dbhost: '',
+          dbuser: '',
+          dbpass: '',
+          dbport: '',
+          statusColor:'#fc605b',
+          statusMessage:'Not Connected',
+          cron:{
+            minute:'',
+            hour:'',
+            dayOfMonth:'',
+            month:'',
+            dayOfWeek:'',
+          },
+          active: true,
+          service: '',
+        },
       },
 
       tokenData: null,
 
       selectedDatas: {
-        newService: "",
+        newService: '',
+        selectedCronTimes: '||||',
+      },
+
+      ftpViewOptions: {
+        width: '100%',
+        isShow:false,
       },
     };
   },
@@ -228,14 +277,30 @@ export default {
     this.getAllServices();
   },
   methods:{
-    ...mapActions(['getAllServices']),
+    ...mapActions(['getAllServices','addOneServices','updateServices']),
     connect(){
-      if(this.formData.service.type == 'yandexdisk')
-        this.$electron.ipcRenderer.send('yandex-oauth', 'getToken');
+      if(this.formData.service.type == 'yandexdisk') {
+        this.$electron.ipcRenderer.send('yandex-oauth');
+      }
     },
     saveService(){
-      this.$utils.saveToken(this.formData.service,JSON.stringify(this.tokenData)).then((id) => {
-        console.log(id);
+      if(this.selectedDatas.newService=="") {
+        this.$utils.saveToken(this.formData.service,JSON.stringify(this.tokenData)).then((row) => {
+          this.addOneServices(row);
+        }).catch((err) => {
+          console.log(err);
+        });
+      }else {
+        this.updateService();
+      }
+    },
+    updateService(){
+      this.$utils.updateService(this.selectedDatas.newService,this.formData.service).then((numReplaced) => {
+        this.updateServices({
+          id: this.selectedDatas.newService,
+          data: this.formData.service,
+        });
+        this.selectedDatas.newService="";
       }).catch((err) => {
         console.log(err);
       });
@@ -256,6 +321,23 @@ export default {
         this.formData.service.statusColor='#fc605b';
         this.formData.service.statusMessage='Not Connected';
       }
+    },
+    'formData.service.type'(val){
+      if(val=='ftp') {
+        this.ftpViewOptions.width='50%';
+        this.ftpViewOptions.isShow=true;
+      }else{
+        this.ftpViewOptions.width='100%';
+        this.ftpViewOptions.isShow=false;
+      }
+    },
+    'selectedDatas.selectedCronTimes'(val){
+      const times=val.split('|');
+      this.formData.data.cron.minute=times[0];
+      this.formData.data.cron.hour=times[1];
+      this.formData.data.cron.dayOfMonth=times[2];
+      this.formData.data.cron.month=times[3];
+      this.formData.data.cron.dayOfWeek=times[4];
     },
   },
   

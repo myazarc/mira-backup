@@ -41,7 +41,16 @@ export default {
     return new Promise((resolve,reject) => {
       this.db.service.insert(payload,(err, newDoc)=>{
         if(err) reject(err);
-        resolve(newDoc._id);
+        resolve(newDoc);
+      });
+    });
+  },
+  updateService(id,payload){
+    return new Promise((resolve,reject) => {
+      console.log(id,payload);
+      this.db.service.update({_id: id},{ $set: payload },{upsert:false},(err, numReplaced)=>{
+        if(err) reject(err);
+        resolve(numReplaced);
       });
     });
   },
@@ -63,5 +72,16 @@ export default {
         resolve(rows);
       });
     });
+  },
+  getDefaultCronTimes(){
+    return {
+      'Custom':                     ['',   '',      '',      '',  ''],
+      'Every Day 9AM':              ['0',  '9',     '*',     '*', '*'],
+      'Every Day 9AM&9PM':          ['0',  '9,21',  '*',     '*', '*' ],
+      'Every Week Monday':          ['0',  '9',     '*',     '*', '1'],
+      'Every Week Monday&Friday':   ['0',  '9',     '*',     '*', '1,5'],
+      'Every Month 15.Day':         ['0',  '9',     '15',    '*', '*'],
+      'Every Month 15. & 30.Day':   ['0',  '9',     '15,30', '*', '*'],
+    };
   },
 }
