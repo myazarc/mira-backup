@@ -13,40 +13,15 @@
                     <span class="icon icon-plus"></span>
                   </button>
               </li>
-              <li class="list-group-item active">
+              <li class="list-group-item"
+              v-for="(item) in allDatas"
+              :key="item._id"
+              :class="{active: item._id == selectedDatas.selectedItemId}"
+              @click="selectRowItem(item._id)"
+              >
                 <div class="media-body">
-                  <strong>Test Connection</strong>
-                  <p>3 Times</p>
-                </div>
-              </li>
-              <li class="list-group-item">
-                <div class="media-body">
-                  <strong>List item title</strong>
-                  <p>Lorem ipsum dolor sit amet.</p>
-                </div>
-              </li>
-              <li class="list-group-item">
-                <div class="media-body">
-                  <strong>List item title</strong>
-                  <p>Lorem ipsum dolor sit amet.</p>
-                </div>
-              </li>
-              <li class="list-group-item">
-                <div class="media-body">
-                  <strong>List item title</strong>
-                  <p>Lorem ipsum dolor sit amet.</p>
-                </div>
-              </li>
-              <li class="list-group-item">
-                <div class="media-body">
-                  <strong>List item title</strong>
-                  <p>Lorem ipsum dolor sit amet.</p>
-                </div>
-              </li>
-              <li class="list-group-item">
-                <div class="media-body">
-                  <strong>List item title</strong>
-                  <p>Lorem ipsum dolor sit amet.</p>
+                  <strong>{{item.name}}</strong>
+                  <p>{{item}}</p>
                 </div>
               </li>
             </ul>
@@ -56,7 +31,7 @@
         </div>
     </ph-window-content>
     <ph-toolbar type="footer"/>
-    <m-dialog v-model="showAddEditDialog" :title="`New Backup`">
+    <m-dialog v-model="showAddEditDialog" @approve="saveData" :title="`New Backup`">
       <div style="padding:10px;">
           <div class="form-group">
             <label>Name</label>
@@ -91,7 +66,7 @@
             <input type="text" v-model="formData.data.dbpass" class="form-control" placeholder="User Password">
           </div>
             <div style="clear:both"></div>
-          <button class="btn btn-positive">Test Connection</button>
+          <button class="btn btn-positive" @click="connectDb">Test Connection</button>
           <br>Status: <span class="icon icon-record" :style="{color:formData.data.statusColor}"></span> {{formData.data.statusMessage}}
         
         </div>
@@ -208,6 +183,8 @@
 <script>
 import { mapActions, mapState } from 'vuex';
 import Dialog from './Dialog/Dialog';
+import mysql from 'mysql';
+
 export default {
   components:{'m-dialog':Dialog},
   name: 'main-page',
@@ -250,6 +227,8 @@ export default {
       selectedDatas: {
         newService: '',
         selectedCronTimes: '||||',
+        dataId: '',
+        selectedItemId : null,
       },
 
       ftpViewOptions: {
@@ -261,6 +240,7 @@ export default {
   computed:{
     ...mapState({
       allServices: state => state.Services.services,
+      allDatas: state => state.Datas.datas,
     }),
   },
   mounted(){
@@ -275,12 +255,18 @@ export default {
       }
     });
     this.getAllServices();
+    this.getAllDatas();
   },
   methods:{
-    ...mapActions(['getAllServices','addOneServices','updateServices']),
+    ...mapActions(['getAllServices','addOneServices','updateServices','getAllDatas','addOneDatas','updateDatas']),
     connect(){
       if(this.formData.service.type == 'yandexdisk') {
         this.$electron.ipcRenderer.send('yandex-oauth');
+      }
+    },
+    connectDb(){
+      if(this.formData.data.dbtype == 'mysql'){
+        this.testConnectMysql();
       }
     },
     saveService(){
@@ -294,6 +280,18 @@ export default {
         this.updateService();
       }
     },
+    saveData(){
+      if(this.selectedDatas.dataId=="") {
+        this.$utils.saveData(this.formData.data).then((row) => {
+          this.addOneDatas(row);
+          this.resetDataForm();
+        }).catch((err) => {
+          console.log(err);
+        });
+      }else {
+        this.updateData();
+      }
+    },
     updateService(){
       this.$utils.updateService(this.selectedDatas.newService,this.formData.service).then((numReplaced) => {
         this.updateServices({
@@ -304,6 +302,67 @@ export default {
       }).catch((err) => {
         console.log(err);
       });
+    },
+    updateData(){
+      this.$utils.updateData(this.selectedDatas.dataId,this.formData.data).then((numReplaced) => {
+        this.updateDatas({
+          id: this.selectedDatas.dataId,
+          data: this.formData.data,
+        });
+        this.resetDataForm();
+      }).catch((err) => {
+        console.log(err);
+      });
+    },
+    testConnectMysql(){
+      const DBConnectionData={
+        host: this.formData.data.dbhost,
+        user: this.formData.data.dbuser,
+        password: this.formData.data.dbpass,
+        database: this.formData.data.dbname,
+        port: this.formData.data.dbport ? this.formData.data.dbport : 3306,
+      };
+      const connection=mysql.createConnection(DBConnectionData);
+      connection.connect((err) => {
+        if(err) {
+          this.formData.data.statusColor =  '#fc605b';;
+          this.formData.data.statusMessage = 'Not Connected';
+          this.$electron.remote.dialog.showMessageBox({title: 'Connection Error',message:err.toString(),buttons:['Ok']});
+        } else {
+          this.formData.data.statusColor =  '#34c84a';
+          this.formData.data.statusMessage = 'Connected!';
+        }
+      });
+        
+     
+      
+    },
+    resetDataForm(){
+      this.formData.data={
+          name: '',
+          dbtype: 'mysql',
+          dbname: '',
+          dbhost: '',
+          dbuser: '',
+          dbpass: '',
+          dbport: '',
+          statusColor:'#fc605b',
+          statusMessage:'Not Connected',
+          cron:{
+            minute:'',
+            hour:'',
+            dayOfMonth:'',
+            month:'',
+            dayOfWeek:'',
+          },
+          active: true,
+          service: '',
+        };
+        this.selectedDatas.selectedCronTimes='||||';
+        this.selectedDatas.dataId= '';
+    },
+    selectRowItem(itemId){
+      this.selectedDatas.selectedItemId=itemId;
     },
   },
   watch:{

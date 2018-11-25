@@ -45,10 +45,25 @@ export default {
       });
     });
   },
+  saveData(payload){
+    return new Promise((resolve,reject) => {
+      this.db.data.insert(payload,(err, newDoc)=>{
+        if(err) reject(err);
+        resolve(newDoc);
+      });
+    });
+  },
   updateService(id,payload){
     return new Promise((resolve,reject) => {
-      console.log(id,payload);
       this.db.service.update({_id: id},{ $set: payload },{upsert:false},(err, numReplaced)=>{
+        if(err) reject(err);
+        resolve(numReplaced);
+      });
+    });
+  },
+  updateData(id,payload){
+    return new Promise((resolve,reject) => {
+      this.db.data.update({_id: id},{ $set: payload },{upsert:false},(err, numReplaced)=>{
         if(err) reject(err);
         resolve(numReplaced);
       });
@@ -68,6 +83,14 @@ export default {
   allService(){
     return new Promise((resolve,reject) => {
       this.db.service.find({},(err, rows) => {
+        if(err) reject(err);
+        resolve(rows);
+      });
+    });
+  },
+  allData(){
+    return new Promise((resolve,reject) => {
+      this.db.data.find({},(err, rows) => {
         if(err) reject(err);
         resolve(rows);
       });
