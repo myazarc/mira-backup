@@ -18,10 +18,11 @@
               :key="item._id"
               :class="{active: item._id == selectedDatas.selectedItemId}"
               @click="selectRowItem(item._id)"
+              @dblclick="editRow(item._id)"
               >
                 <div class="media-body">
                   <strong>{{item.name}}</strong>
-                  <p>{{item}}</p>
+                  <p>{{item.dbtype}} <span class="icon icon-record" style="float:right;" :style="{color:item.active?`#34c84a`:`#fc605b`}"></span></p>
                 </div>
               </li>
             </ul>
@@ -31,7 +32,7 @@
         </div>
     </ph-window-content>
     <ph-toolbar type="footer"/>
-    <m-dialog v-model="showAddEditDialog" @approve="saveData" :title="`New Backup`">
+    <m-dialog v-model="showAddEditDialog" @approve="saveData" @close="cancelData" :title="`New Backup`">
       <div style="padding:10px;">
           <div class="form-group">
             <label>Name</label>
@@ -364,6 +365,17 @@ export default {
     selectRowItem(itemId){
       this.selectedDatas.selectedItemId=itemId;
     },
+    editRow(itemId){
+      this.selectedDatas.dataId=itemId;
+      const row = this.allDatas.find((item) => item._id==itemId);
+      if(row){
+        this.formData.data = Object.assign({},row);
+        this.showAddEditDialog = true;
+      }
+    },
+    cancelData(){
+      this.resetDataForm();
+    },
   },
   watch:{
     'selectedDatas.newService'(val) {
@@ -398,6 +410,11 @@ export default {
       this.formData.data.cron.month=times[3];
       this.formData.data.cron.dayOfWeek=times[4];
     },
+    allDatas(){
+      if(this.selectedDatas.selectedItemId==null && this.allDatas.length){
+        this.selectedDatas.selectedItemId = this.allDatas[0]._id;
+      }
+    }
   },
   
 }
