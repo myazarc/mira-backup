@@ -5,22 +5,39 @@ import {remote} from 'electron';
 import fs from 'fs';
 import path from 'path';
 import v4 from 'uuid/v4';
+import mysqldump from 'mysqldump';
+import AdmZip from 'adm-zip';
+import schedule from 'node-schedule';
+
+import { upload,meta } from 'ya-disk';
+import { request } from 'https';
+import { parse } from 'url';
+
+import mLog from './mlogs';
 
 export default {
   db: {
     service:null,
     data: null,
   },
+  logs: {},
+  crons: {},
   cryptr: null,
   init(){
     if(this.db.service == null) {
       this.dbInit();
       this.cryptrInit();
       this.tokenInit();
+      this.dumpPathInit();
+      this.logPathInit();
+      this.runCron();
     }
   },
   getDbPath(){
     return remote.app.getPath('userData');
+  },
+  getLogPath(){
+    return path.join(this.getDbPath(),'logs');
   },
   dbInit(){
     this.db.service = new nedb({ filename: path.join(this.getDbPath(),'mira.service'), autoload: true });
@@ -35,6 +52,19 @@ export default {
   tokenInit(){
     if(!fs.existsSync(this.getTokenPath())){
       fs.mkdirSync(this.getTokenPath());
+    }
+  },
+  logPathInit(){
+    if(!fs.existsSync(this.getLogPath())){
+      fs.mkdirSync(this.getLogPath());
+    }
+  },
+  getDumpPath(){
+    return path.join(this.getDbPath(),'dumps');
+  },
+  dumpPathInit(){
+    if(!fs.existsSync(this.getDumpPath())){
+      fs.mkdirSync(this.getDumpPath());
     }
   },
   saveService(payload){
@@ -77,6 +107,11 @@ export default {
     payload._token = fileName;
     return this.saveService(payload);
   },
+  readToken(tokenFileName){
+    const tokenFilePath  = path.join(this.getTokenPath(),`${tokenFileName}.token`);
+    const content = fs.readFileSync(tokenFilePath);
+    return this.cryptr.decrypt(content);
+  },
   createFile(fileName,content){
     fs.writeFileSync(fileName,content);
   },
@@ -96,6 +131,14 @@ export default {
       });
     });
   },
+  findService(id){
+    return new Promise((resolve,reject) => {
+      this.db.service.findOne({_id:id},(err, row) => {
+        if(err) reject(err);
+        resolve(row);
+      });
+    });
+  },
   getDefaultCronTimes(){
     return {
       'Custom':                     ['',   '',      '',      '',  ''],
@@ -106,5 +149,115 @@ export default {
       'Every Month 15.Day':         ['0',  '9',     '15',    '*', '*'],
       'Every Month 15. & 30.Day':   ['0',  '9',     '15,30', '*', '*'],
     };
+  },
+  async dumpMysql(payload){
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const seconds = date.getSeconds();
+    const fileName=path.join(this.getDumpPath(),`${payload.dbname}-${year+'-'+month+'-'+day+'--'+hours+'-'+minutes+'-'+seconds}--mira-backup.sql`);
+    const result = await mysqldump({
+      dumpToFile: fileName,
+      connection:{
+        host: payload.dbhost,
+        user: payload.dbuser,
+        password: payload.dbpass,
+        database: payload.dbname,
+        port: payload.dbport,
+      },
+    });
+    const zipFileName=`${fileName}.zip`;
+    this.createZip(fileName,zipFileName);
+    this.removeFile(fileName);
+    
+    if(payload.service.type=='yandexdisk'){
+      this.yandexDirControl(payload.service.token,zipFileName,payload.item);
+    }
+  },
+  removeFile(fileName){
+    fs.unlinkSync(fileName);
+  },
+  createZip(filePath,zipFilePath){
+    const zip = new AdmZip();
+    zip.addLocalFile(filePath);
+    zip.writeZip(zipFilePath);
+  },
+  uploadYandex(tokenFile,filePath,item){
+    const API_TOKEN = JSON.parse(this.readToken(tokenFile)).access_token;
+    upload.link(API_TOKEN, `disk:/MiraBackup/${filePath.replace(/^.*[\\\/]/, '')}`, true, ({ href, method }) => {
+      const fileStream = fs.createReadStream(filePath);
+      console.log(fileStream);
+      const uploadStream = request(Object.assign(parse(href), { method }));
+     
+      fileStream.pipe(uploadStream);
+     
+      fileStream.on('end', () => {
+        uploadStream.end();
+        this.removeFile(filePath);
+        this.logs[item.id].info(`${item.name} with service ${item.service.name} Cron completed with mysql`);
+      })
+      .on('error', (e) => {
+        this.logs[item.id].error(`${item.name} with service ${item.service.name} not upload completed. ERR: ${e.toString()}`);
+      });
+    },(e)=>{
+      this.logs[item.id].error(`${item.name} with service ${item.service.name} not upload completed. ERR: ${e.toString()}`);
+    });
+  },
+  yandexDirControl(tokenFile,zipFileName,item){
+    const API_TOKEN = JSON.parse(this.readToken(tokenFile)).access_token;
+    meta.get(API_TOKEN, 'disk:/MiraBackup/', {}, (e) => {
+      this.uploadYandex(tokenFile,zipFileName,item);
+    },(err) => {
+      upload.createDir(API_TOKEN,'disk:/MiraBackup/',false,() => {
+        this.uploadYandex(tokenFile,zipFileName,item);
+      },(err)=>{
+        this.logs[item.id].error(`${item.name} with service ${service.name} not created directory. ERR: ${err.toString()}`);
+      })
+    });
+  },
+  runCron(){
+    this.allData().then((rows) => {
+      rows.forEach((item) => {
+        if(item.active){
+          if(item.dbtype=='mysql'){
+            this.findService(item.service).then((service)=>{
+              if(service.statusMessage=='Connected'){
+                this.logs[item._id] = new mLog({
+                  logDir: this.getLogPath(),
+                  logFileName: `${item._id}.log`,
+                });
+                const data = {
+                  item:{
+                    id: item._id,
+                    name: item.name,
+                    service:{
+                      name: service.name,
+                    },
+                  },
+                  dbname:item.dbname,
+                  dbhost:item.dbhost,
+                  dbuser:item.dbuser,
+                  dbpass:item.dbpass,
+                  dbport:item.dbport,
+                  service:{
+                    type: service.type,
+                    token: service.token,
+                  },
+                };
+                const cron = `${item.cron.minute} ${item.cron.hour} ${item.cron.dayOfMonth} ${item.cron.month} ${item.cron.dayOfWeek}`;
+                this.crons[item._id]=schedule.scheduleJob(cron,() => {
+                  this.logs[item._id].info(`${item.name} with service ${service.name} Cron start running`);
+                  this.dumpMysql(data);
+                });
+                this.logs[item._id].info(`${item.name} with service ${service.name} Cron added`);
+              }
+            });
+          }
+        }
+      });
+    });
   },
 }
