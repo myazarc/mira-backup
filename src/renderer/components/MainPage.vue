@@ -27,8 +27,7 @@
               </li>
             </ul>
           </div>
-          <div class="pane">
-
+          <div class="pane" style="padding:5px" v-html="logContent">
           </div>
         </div>
     </ph-window-content>
@@ -159,19 +158,26 @@
         <div style="width:50%;padding:5px;float:left" v-show="ftpViewOptions.isShow">
          <div class="form-group">
             <label><strong>FTP</strong><br>Host</label>
-            <input type="text" class="form-control" placeholder="Host">
+            <input type="text" class="form-control" v-model="formData.service.ftpHost" placeholder="Host">
           </div>
-          <div class="form-group">
+          <div class="form-group" style="width:49%; float:left">
             <label>User Name</label>
-            <input type="text" class="form-control" placeholder="User Name">
+            <input type="text" class="form-control" v-model="formData.service.ftpUser" placeholder="User Name">
           </div>
-          <div class="form-group">
+          <div class="form-group" style="width:49%; float:left;margin-left:2%">
             <label>User Password</label>
-            <input type="text" class="form-control" placeholder="User Password">
+            <input type="text" class="form-control" v-model="formData.service.ftpPass" placeholder="User Password">
           </div>
-          <div class="form-group">
+          <div class="form-group" style="width:49%; float:left;">
+            <label>Type</label>
+              <select v-model="formData.service.ftpType" class="form-control">
+                <option value="ftp">FTP</option>
+                <option value="sftp">sFTP</option>
+              </select>
+          </div>
+          <div class="form-group" style="width:49%; float:left;margin-left:2%">
             <label>Port</label>
-            <input type="text" class="form-control" placeholder="Port">
+            <input type="text" class="form-control" v-model="formData.service.ftpPort" placeholder="Port">
           </div>
         </div>
         <div style="clear:both"></div>
@@ -186,6 +192,7 @@
 import { mapActions, mapState } from 'vuex';
 import Dialog from './Dialog/Dialog';
 import mysql from 'mysql';
+import EasyFtp from 'easy-ftp';
 
 export default {
   components:{'m-dialog':Dialog},
@@ -201,6 +208,11 @@ export default {
           type: 'yandexdisk',
           statusColor:'#fc605b',
           statusMessage:'Not Connected',
+          ftpType: 'ftp',
+          ftpHost: '',
+          ftpUser: '',
+          ftpPass: '',
+          ftpPort: '21',
         },
         data:{
           name: '',
@@ -237,6 +249,7 @@ export default {
         width: '100%',
         isShow:false,
       },
+      logContent:null,
     };
   },
   computed:{
@@ -258,13 +271,22 @@ export default {
     });
     this.getAllServices();
     this.getAllDatas();
+    this.$utils.watcher.change = (path,id) => {
+      this.watchLogFile(id);
+    };
   },
   methods:{
     ...mapActions(['getAllServices','addOneServices','updateServices','getAllDatas','addOneDatas','updateDatas']),
     connect(){
-      if(this.formData.service.type == 'yandexdisk') {
-        this.$electron.ipcRenderer.send('yandex-oauth');
-      }
+      switch(this.formData.service.type) {
+        case 'yandexdisk':
+          this.$electron.ipcRenderer.send('yandex-oauth');
+        break;
+
+        case 'ftp':
+          this.testConnectFtp();
+        break;
+      };
     },
     connectDb(){
       if(this.formData.data.dbtype == 'mysql'){
@@ -335,8 +357,6 @@ export default {
           this.formData.data.statusMessage = 'Connected!';
         }
       });
-        
-     
       
     },
     resetDataForm(){
@@ -360,8 +380,22 @@ export default {
           active: true,
           service: '',
         };
+        this.resetServiceForm();
         this.selectedDatas.selectedCronTimes='||||';
         this.selectedDatas.dataId= '';
+    },
+    resetServiceForm(){
+      this.formData.service={
+        name: null,
+        type: 'yandexdisk',
+        statusColor:'#fc605b',
+        statusMessage:'Not Connected',
+        ftpType: 'ftp',
+        ftpHost: '',
+        ftpUser: '',
+        ftpPass: '',
+        ftpPort: '21',
+      };
     },
     selectRowItem(itemId){
       this.selectedDatas.selectedItemId=itemId;
@@ -377,6 +411,50 @@ export default {
     cancelData(){
       this.resetDataForm();
     },
+    watchLogFile(val){
+      if(val in this.$utils.logs){
+        this.$utils.logs[val].getLastLines().then((res) => {
+          const lineArr=res.split('\n');
+          lineArr.pop();
+          this.logContent=lineArr.reverse().join('<br>').replace(/\] ERROR/,'] <strong style="color:red">ERROR</strong>');
+        });
+      }
+    },
+    testConnectFtp() {
+      const ftp = new EasyFtp();
+      const config = {
+        host: this.formData.service.ftpHost,
+        port: this.formData.service.ftpPort,
+        username: this.formData.service.ftpUser,
+        password: this.formData.service.ftpPass,
+        type : this.formData.service.ftpType
+      };
+
+      process.once('uncaughtException', (err) => {
+        this.formData.service.statusColor =  '#fc605b';
+        this.formData.service.statusMessage = 'Not Connected';
+        this.$electron.remote.dialog.showMessageBox({title: 'Connection Error',message:err.toString(),buttons:['Ok']});
+      });
+
+      ftp.connect(config);
+
+      ftp.pwd((err,path) => {
+        if(err) {
+          this.formData.service.statusColor =  '#fc605b';
+          this.formData.service.statusMessage = 'Not Connected';
+        } else {
+          this.formData.service.statusColor =  '#34c84a';
+          this.formData.service.statusMessage = 'Connected';
+          ftp.close();
+        }
+      });
+
+      ftp.on('error',(err) => {
+        this.formData.data.statusColor =  '#fc605b';;
+        this.formData.data.statusMessage = 'Not Connected';
+        this.$electron.remote.dialog.showMessageBox({title: 'Connection Error',message:err.toString(),buttons:['Ok']});
+      });
+    },
   },
   watch:{
     'selectedDatas.newService'(val) {
@@ -387,11 +465,14 @@ export default {
         this.formData.service.type=selectedRow.type;
         this.formData.service.statusColor=selectedRow.statusColor;
         this.formData.service.statusMessage=selectedRow.statusMessage;
+        this.formData.service.ftpType=selectedRow.ftpType;
+        this.formData.service.ftpHost=selectedRow.ftpHost;
+        this.formData.service.ftpUser=selectedRow.ftpUser;
+        this.formData.service.ftpPass=selectedRow.ftpPass;
+        this.formData.service.ftpPort=selectedRow.ftpPort;
+
       }else {
-        this.formData.service.name=null;
-        this.formData.service.type='yandexdisk';
-        this.formData.service.statusColor='#fc605b';
-        this.formData.service.statusMessage='Not Connected';
+        this.resetServiceForm();
       }
     },
     'formData.service.type'(val){
@@ -414,6 +495,15 @@ export default {
     allDatas(){
       if(this.selectedDatas.selectedItemId==null && this.allDatas.length){
         this.selectedDatas.selectedItemId = this.allDatas[0]._id;
+      }
+    },
+    'selectedDatas.selectedItemId'(val,oldVal){
+      if(val!=null) {
+        this.$utils.logWatch(val);
+        this.watchLogFile(val);
+      }
+      if(oldVal) {
+        this.$utils.logUnWatch(oldVal);
       }
     }
   },

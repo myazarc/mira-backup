@@ -24,4 +24,18 @@
     margin: 0px;
     padding: 0px;
   }
+
+  ::-webkit-scrollbar {
+    height: 12px;
+    width: 5px;
+    background: #fff;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgb(40, 110, 202);
+}
+
+::-webkit-scrollbar-corner {
+    background: rgb(40, 110, 202);
+}
 </style>

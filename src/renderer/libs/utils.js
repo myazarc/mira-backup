@@ -8,6 +8,8 @@ import v4 from 'uuid/v4';
 import mysqldump from 'mysqldump';
 import AdmZip from 'adm-zip';
 import schedule from 'node-schedule';
+import EasyFtp from 'easy-ftp';
+
 
 import { upload,meta } from 'ya-disk';
 import { request } from 'https';
@@ -23,6 +25,11 @@ export default {
   logs: {},
   crons: {},
   cryptr: null,
+  watcher: {
+    change: (path,id) => {
+
+    },
+  },
   init(){
     if(this.db.service == null) {
       this.dbInit();
@@ -170,12 +177,17 @@ export default {
       },
     });
     const zipFileName=`${fileName}.zip`;
-    this.createZip(fileName,zipFileName);
-    this.removeFile(fileName);
     
-    if(payload.service.type=='yandexdisk'){
-      this.yandexDirControl(payload.service.token,zipFileName,payload.item);
-    }
+
+    
+    this.createZip(fileName,zipFileName).then(() => {
+        this.removeFile(fileName);
+        if(payload.service.type=='yandexdisk'){
+          this.yandexDirControl(payload.service.token,zipFileName,payload.item);
+        }else if(payload.service.type=='ftp'){
+          this.ftpDirControl(zipFileName,payload.item);
+        }
+    });
   },
   removeFile(fileName){
     fs.unlinkSync(fileName);
@@ -183,28 +195,80 @@ export default {
   createZip(filePath,zipFilePath){
     const zip = new AdmZip();
     zip.addLocalFile(filePath);
-    zip.writeZip(zipFilePath);
+    return new Promise((resolve,reject) => {
+      zip.toBuffer((buf) => {
+        zip.writeZip(zipFilePath);
+        resolve(buf);
+      },reject);
+    });
+  },
+  ftpDirControl(zipFileName,item){
+    const ftp = new EasyFtp();
+      const config = {
+        host: item.service.ftp.host,
+        port: item.service.ftp.port,
+        username: item.service.ftp.user,
+        password: item.service.ftp.pass,
+        type : item.service.ftp.type
+      };
+
+
+      ftp.connect(config);
+
+      ftp.exist("/MiraBackup", (exist) => {
+        if(!exist){
+          ftp.mkdir("/MiraBackup", (err) => {
+            if(err) {
+              this.logs[item.id].error(`${item.name} with service ${item.service.name} not created maindir. ERR: ${err.toString()}`); 
+              ftp.close();
+            } else this.uploadFtp(ftp,zipFileName,item);
+          });	
+        } else {
+          this.uploadFtp(ftp,zipFileName,item);
+        }
+      });
+
+      ftp.on('error',(e) => {
+        this.logs[item.id].error(`${item.name} with service ${item.service.name} not upload completed. ERR: ${e.toString()}`);
+        ftp.close();
+      });
+  },
+  uploadFtp(ftp,zipFileName,item){
+    ftp.upload(zipFileName, `/MiraBackup/${zipFileName.replace(/^.*[\\\/]/, '')}`, (err) => {
+      if(err) {
+        this.logs[item.id].error(`${item.name} with service ${item.service.name} not upload completed. ERR: ${err.toString()}`);
+        ftp.close();
+        return;
+      }
+      this.removeFile(zipFileName);
+      this.logs[item.id].info(`${item.name} with service ${item.service.name} Cron completed with mysql`);
+      ftp.close();
+    });
   },
   uploadYandex(tokenFile,filePath,item){
     const API_TOKEN = JSON.parse(this.readToken(tokenFile)).access_token;
-    upload.link(API_TOKEN, `disk:/MiraBackup/${filePath.replace(/^.*[\\\/]/, '')}`, true, ({ href, method }) => {
-      const fileStream = fs.createReadStream(filePath);
-      console.log(fileStream);
-      const uploadStream = request(Object.assign(parse(href), { method }));
-     
-      fileStream.pipe(uploadStream);
-     
-      fileStream.on('end', () => {
-        uploadStream.end();
-        this.removeFile(filePath);
-        this.logs[item.id].info(`${item.name} with service ${item.service.name} Cron completed with mysql`);
-      })
-      .on('error', (e) => {
+
+    setTimeout(() => {
+
+      upload.link(API_TOKEN, `disk:/MiraBackup/${filePath.replace(/^.*[\\\/]/, '')}`, true, ({ href, method }) => {
+        const fileStream = fs.createReadStream(filePath);
+        const uploadStream = request(Object.assign(parse(href), { method }));
+      
+        fileStream.pipe(uploadStream);
+      
+        fileStream.on('end', () => {
+          uploadStream.end();
+          this.removeFile(filePath);
+          this.logs[item.id].info(`${item.name} with service ${item.service.name} Cron completed with mysql`);
+        })
+        .on('error', (e) => {
+          this.logs[item.id].error(`${item.name} with service ${item.service.name} not upload completed. ERR: ${e.toString()}`);
+        });
+      },(e)=>{
         this.logs[item.id].error(`${item.name} with service ${item.service.name} not upload completed. ERR: ${e.toString()}`);
       });
-    },(e)=>{
-      this.logs[item.id].error(`${item.name} with service ${item.service.name} not upload completed. ERR: ${e.toString()}`);
-    });
+
+    },0);
   },
   yandexDirControl(tokenFile,zipFileName,item){
     const API_TOKEN = JSON.parse(this.readToken(tokenFile)).access_token;
@@ -228,6 +292,11 @@ export default {
                 this.logs[item._id] = new mLog({
                   logDir: this.getLogPath(),
                   logFileName: `${item._id}.log`,
+                  watcher: {
+                    change: (path) => {
+                      this.watcher.change(path,item._id);
+                    },
+                  }
                 });
                 const data = {
                   item:{
@@ -235,6 +304,13 @@ export default {
                     name: item.name,
                     service:{
                       name: service.name,
+                      ftp: {
+                        user:service.ftpUser,
+                        pass:service.ftpPass,
+                        host:service.ftpHost,
+                        port:service.ftpPort,
+                        type:service.ftpType,
+                      },
                     },
                   },
                   dbname:item.dbname,
@@ -259,5 +335,15 @@ export default {
         }
       });
     });
+  },
+  logWatch(id){
+    if(id in this.logs){
+      this.logs[id].watch();
+    }
+  },
+  logUnWatch(id){
+    if(id in this.logs){
+      this.logs[id].unwatch();
+    }
   },
 }
