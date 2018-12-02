@@ -35,9 +35,8 @@ export default {
       this.$emit('close');
     },
     saveDialog(){
-      this.$refs.dialog.close();
       this.$emit('input',false);
-      this.$emit('approve');
+      this.$emit('approve',this.$refs.dialog);
     },
   },
   watch:{

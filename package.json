@@ -7,6 +7,7 @@
   "main": "./dist/electron/main.js",
   "scripts": {
     "build": "node .electron-vue/build.js && electron-builder",
+    "build:win": "node .electron-vue/build.js && electron-builder -w --x64",
     "build:dir": "node .electron-vue/build.js && electron-builder --dir",
     "build:clean": "cross-env BUILD_TARGET=clean node .electron-vue/build.js",
     "build:web": "cross-env BUILD_TARGET=web node .electron-vue/build.js",
@@ -17,7 +18,7 @@
     "postinstall": ""
   },
   "build": {
-    "productName": "mira-backup",
+    "productName": "Mira Backup",
     "appId": "com.myazarc.mirabackup",
     "directories": {
       "output": "build"
@@ -47,11 +48,13 @@
       "icon": "build/icons/icon.ico"
     },
     "linux": {
-      "icon": "build/icons"
+      "icon": "build/icons",
+      "target": ["deb", "AppImage", "snap"]
     }
   },
   "dependencies": {
     "adm-zip": "^0.4.13",
+    "auto-launch": "^5.0.5",
     "chokidar": "^2.0.4",
     "cryptr": "^4.0.2",
     "easy-ftp": "^0.3.44",

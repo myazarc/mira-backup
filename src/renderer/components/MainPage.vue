@@ -7,14 +7,14 @@
           <div class="pane pane-sm sidebar">
             <ul class="list-group">
               <li class="list-group-header">
-                  <input class="form-control search-input pull-left" type="text" placeholder="Search for someone">
+                  <input class="form-control search-input pull-left" v-model="searchTerm" type="text" placeholder="Search for someone">
                   <button class="btn btn-default btn-large add-button pull-left" title="New" 
                   @click="showAddEditDialog = true">
                     <span class="icon icon-plus"></span>
                   </button>
               </li>
               <li class="list-group-item"
-              v-for="(item) in allDatas"
+              v-for="(item) in getAllReRenderData()"
               :key="item._id"
               :class="{active: item._id == selectedDatas.selectedItemId}"
               @click="selectRowItem(item._id)"
@@ -250,6 +250,10 @@ export default {
         isShow:false,
       },
       logContent:null,
+
+      isSearch : false,
+      searchTerm: null,
+      searchedData: [],
     };
   },
   computed:{
@@ -269,6 +273,16 @@ export default {
         this.formData.service.statusMessage = 'Not Connected';
       }
     });
+
+    this.$electron.ipcRenderer.on('hide-window',(event,arg) => {
+      this.$utils.logUnWatch(this.selectedDatas.selectedItemId);
+    });
+
+    this.$electron.ipcRenderer.on('show-window',(event,arg) => {
+      this.$utils.logWatch(this.selectedDatas.selectedItemId);
+    });
+
+
     this.getAllServices();
     this.getAllDatas();
     this.$utils.watcher.change = (path,id) => {
@@ -277,6 +291,12 @@ export default {
   },
   methods:{
     ...mapActions(['getAllServices','addOneServices','updateServices','getAllDatas','addOneDatas','updateDatas']),
+    getAllReRenderData(){
+      if(this.isSearch) {
+        return this.searchedData;
+      }
+      return this.allDatas;
+    },
     connect(){
       switch(this.formData.service.type) {
         case 'yandexdisk':
@@ -293,27 +313,52 @@ export default {
         this.testConnectMysql();
       }
     },
-    saveService(){
-      if(this.selectedDatas.newService=="") {
-        this.$utils.saveToken(this.formData.service,JSON.stringify(this.tokenData)).then((row) => {
-          this.addOneServices(row);
-        }).catch((err) => {
-          console.log(err);
-        });
-      }else {
-        this.updateService();
+    saveService(dialog){
+      if(this.formData.service.name == '') {
+        this.$electron.remote.dialog.showMessageBox({title: 'Form Data Error',message: 'Name not null!',buttons:['Ok']});
+      }else if(this.formData.service.statusMessage != 'Connected'){
+        this.$electron.remote.dialog.showMessageBox({title: 'Form Data Error',message: 'Status must be "Connected". Please, click Connect button.',buttons:['Ok']});
+      } else {
+        if(this.selectedDatas.newService=="") {
+          this.$utils.saveToken(this.formData.service,JSON.stringify(this.tokenData)).then((row) => {
+            this.addOneServices(row);
+          }).catch((err) => {
+            console.log(err);
+          });
+        }else {
+          this.updateService();
+        }
+        dialog.close();
       }
     },
-    saveData(){
-      if(this.selectedDatas.dataId=="") {
-        this.$utils.saveData(this.formData.data).then((row) => {
-          this.addOneDatas(row);
-          this.resetDataForm();
-        }).catch((err) => {
-          console.log(err);
-        });
+    saveData(dialog){
+      if(this.formData.data.name == '') {
+        this.$electron.remote.dialog.showMessageBox({title: 'Form Data Error',message: 'Name not null!',buttons:['Ok']});
+      } else if (this.formData.data.dbtype == ''){
+        this.$electron.remote.dialog.showMessageBox({title: 'Form Data Error',message: 'Database Type not null!',buttons:['Ok']});
+      } else if (this.formData.data.statusMessage != 'Connected!'){
+        this.$electron.remote.dialog.showMessageBox({title: 'Form Data Error',message: 'DB Status must be "Connected!". Please, click test connection button.',buttons:['Ok']});
+      } else if (this.formData.data.cron.minute == ''
+                || this.formData.data.cron.hour == ''
+                || this.formData.data.cron.dayOfMonth == ''
+                || this.formData.data.cron.month == ''
+                || this.formData.data.cron.dayOfWeek == ''
+                ){
+        this.$electron.remote.dialog.showMessageBox({title: 'Form Data Error',message: 'Backup Times not null!',buttons:['Ok']});
+      }else if (this.formData.data.service == '') {
+        this.$electron.remote.dialog.showMessageBox({title: 'Form Data Error',message: 'Upload Service not null!',buttons:['Ok']});
       }else {
-        this.updateData();
+        if(this.selectedDatas.dataId=="") {
+          this.$utils.saveData(this.formData.data).then((row) => {
+            this.addOneDatas(row);
+            this.resetDataForm();
+          }).catch((err) => {
+            console.log(err);
+          });
+        }else {
+          this.updateData();
+        }
+        dialog.close();
       }
     },
     updateService(){
@@ -504,6 +549,19 @@ export default {
       }
       if(oldVal) {
         this.$utils.logUnWatch(oldVal);
+      }
+    },
+    searchTerm(val){
+      if(val!=''){
+        this.searchedData = this.allDatas.filter((item) => {
+          if(item.name.includes(val))
+            return true;
+          return false;
+        });
+        this.isSearch = true;
+      }else {
+        this.isSearch = false;
+        this.searchedData = [];
       }
     }
   },

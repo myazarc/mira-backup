@@ -1,18 +1,29 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, Tray, Menu } from 'electron'
+import path from 'path';
 const electronOauth2 = require('electron-oauth2');
+
+import AutoLaunch from 'auto-launch';
+
+const autoLaunch = new AutoLaunch({
+  name: 'Mira Backup',
+});
 
 /**
  * Set `__static` path to static files in production
  * https://simulatedgreg.gitbooks.io/electron-vue/content/en/using-static-assets.html
  */
 if (process.env.NODE_ENV !== 'development') {
-  global.__static = require('path').join(__dirname, '/static').replace(/\\/g, '\\\\')
+  global.__static = path.join(__dirname, '/static').replace(/\\/g, '\\\\')
 }
 
 let mainWindow
 const winURL = process.env.NODE_ENV === 'development'
   ? `http://localhost:9080`
   : `file://${__dirname}/index.html`
+
+const application = {
+  isQuiting: false,
+};
 
 function createWindow () {
   /**
@@ -21,14 +32,60 @@ function createWindow () {
   mainWindow = new BrowserWindow({
     height: 563,
     useContentSize: true,
-    width: 1000
+    width: 1000,
+    icon: path.join(__static,'256x256.png'),
+    title: 'Mira Backup',
   })
 
-  mainWindow.loadURL(winURL)
+  let iconPath=null;
+  
+  switch (process.platform) {
+    case 'win32':
+      iconPath = path.join(__static,'icon.ico');
+    break;
+    default:
+      iconPath = path.join(__static,'256x256.png');
+    break;
+  };
+
+  mainWindow.loadURL(winURL);
+  const appIcon = new Tray(iconPath)
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Show App', click:  function(){
+        mainWindow.show();
+    } },
+    { label: 'Quit', click:  function(){
+        application.isQuiting = true;
+        app.quit();
+    } }
+  ]);
+
+  appIcon.setContextMenu(contextMenu);
 
   mainWindow.on('closed', () => {
     mainWindow = null
+  });
+
+  mainWindow.on('minimize',function(event){
+    event.preventDefault();
+    mainWindow.hide();
+    mainWindow.webContents.send('hide-window');
+  });
+
+  mainWindow.on('show', function () {
+    appIcon.setHighlightMode('always');
+    mainWindow.webContents.send('show-window');
   })
+
+  mainWindow.on('close', function (event) {
+      if(!application.isQuiting){
+          event.preventDefault();
+          mainWindow.hide();
+          mainWindow.webContents.send('hide-window');
+      }
+
+      return false;
+  });
 
   ipcMain.on('yandex-oauth',(event,arg) => {
     const windowParams = {
@@ -61,6 +118,17 @@ function createWindow () {
       event.sender.send('yandex-oauth-reply', {status:false});
     });
   });
+  
+  if (process.env.NODE_ENV !== 'development') {
+    autoLaunch.isEnabled().then((isEnabled) => {
+      if(isEnabled){
+          return;
+      }
+      autoLaunch.enable();
+    }).catch((err) => {
+      console.log(err);
+    });
+  }
 }
 
 app.on('ready', createWindow)
