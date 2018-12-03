@@ -111,7 +111,7 @@ export default {
     const filePath = path.join(this.getTokenPath(),`${fileName}.token`);
     const fileContent = this.cryptr.encrypt(strifingyToken);
     this.createFile(filePath,fileContent);
-    payload._token = fileName;
+    payload.token = fileName;
     return this.saveService(payload);
   },
   readToken(tokenFileName){
@@ -197,7 +197,7 @@ export default {
     zip.addLocalFile(filePath);
     return new Promise((resolve,reject) => {
       zip.toBuffer((buf) => {
-        zip.writeZip(zipFilePath);
+		fs.writeFileSync(zipFilePath,buf);
         resolve(buf);
       },reject);
     });
