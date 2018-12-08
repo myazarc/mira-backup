@@ -11,7 +11,7 @@ import schedule from 'node-schedule';
 import EasyFtp from 'easy-ftp';
 
 
-import { upload,meta } from 'ya-disk';
+import { upload,meta,resources } from 'ya-disk2';
 import { request } from 'https';
 import { parse } from 'url';
 
@@ -275,7 +275,7 @@ export default {
     meta.get(API_TOKEN, 'disk:/MiraBackup/', {}, (e) => {
       this.uploadYandex(tokenFile,zipFileName,item);
     },(err) => {
-      upload.createDir(API_TOKEN,'disk:/MiraBackup/',false,() => {
+      resources.create(API_TOKEN,'disk:/MiraBackup/',() => {
         this.uploadYandex(tokenFile,zipFileName,item);
       },(err)=>{
         this.logs[item.id].error(`${item.name} with service ${service.name} not created directory. ERR: ${err.toString()}`);
